@@ -5,9 +5,13 @@ const Products = ({ val, setval, list }) => {
   const [filteredProduct, setFilteredProduct] = useState(list);
 
   useEffect(() => {
-    setFilteredProduct(
-      list.filter((item) => item.product.toLowerCase().includes(val.toLowerCase()))
-    );
+    if (!list || list.length === 0) {
+      setFilteredProduct([]);
+    } else {
+      setFilteredProduct(
+        list.filter((item) => item.product.toLowerCase().includes(val.toLowerCase()))
+      );
+    }
   }, [val, list]);
 
   // Animation variants
@@ -74,15 +78,43 @@ const Products = ({ val, setval, list }) => {
             exit={{ opacity: 0 }}
             className="flex flex-col items-center justify-center h-32 bg-gray-700/30 rounded-lg"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="text-center text-xl font-medium text-gray-400">
-              No products found
-            </p>
-            <p className="text-center text-sm text-gray-500 mt-1">
-              Try a different search term
-            </p>
+            {val ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-center text-xl font-medium text-gray-400">
+                  No products found
+                </p>
+                <p className="text-center text-sm text-gray-500 mt-1">
+                  Try a different search term
+                </p>
+              </>
+            ) : list.length === 0 ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <p className="text-center text-xl font-medium text-gray-400">
+                  No products available
+                </p>
+                <p className="text-center text-sm text-gray-500 mt-1">
+                  Add a product using the button above
+                </p>
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-center text-xl font-medium text-gray-400">
+                  No products found
+                </p>
+                <p className="text-center text-sm text-gray-500 mt-1">
+                  Try a different search term
+                </p>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

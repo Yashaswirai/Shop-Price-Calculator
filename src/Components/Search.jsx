@@ -2,9 +2,10 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import Products from "./products";
 import Calculation from "./Calculation";
+import AddProduct from "./AddProduct";
 
 const Search = () => {
-  const list = [
+  const [productList, setProductList] = useState([
     { product: "Aata", price_per_kg: 38 },
     { product: "Maida", price_per_kg: 40 },
     { product: "Moong Dal", price_per_kg: 120 },
@@ -36,7 +37,7 @@ const Search = () => {
     { product: "Aachar", price_per_kg: 100 },
     { product: "Batasa", price_per_kg: 83 },
     { product: "Meetha", price_per_kg: 62 },
-  ];
+  ]);
   const [value, setValue] = useState("");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -49,7 +50,7 @@ const Search = () => {
     const quantityNum = quantity === "" ? 0 : Number(quantity);
 
     // Find the selected product
-    const commodity = list.find((item) => item.product === value);
+    const commodity = productList.find((item) => item.product === value);
 
     if (!commodity) {
       console.error("Product not found");
@@ -194,7 +195,24 @@ const Search = () => {
         </form>
       </motion.div>
 
-      <Products val={value} setval={setValue} list={list} />
+      <AddProduct
+        onAddProduct={(newProduct) => {
+          // Check if product with same name already exists
+          const exists = productList.some(
+            item => item.product.toLowerCase() === newProduct.product.toLowerCase()
+          );
+
+          if (exists) {
+            alert(`Product "${newProduct.product}" already exists!`);
+            return;
+          }
+
+          // Add the new product to the list
+          setProductList([...productList, newProduct]);
+        }}
+      />
+
+      <Products val={value} setval={setValue} list={productList} />
       <Calculation calc={calculation} />
     </motion.div>
   );
