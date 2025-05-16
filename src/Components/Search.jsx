@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import Products from "./products";
+import Products from "./Products";
 import Calculation from "./Calculation";
 import AddProduct from "./AddProduct";
 
