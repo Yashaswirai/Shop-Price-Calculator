@@ -1,37 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const AddProduct = ({ onAddProduct }) => {
+const AddProduct = ({ onAddProduct, productList }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [productName, setProductName] = useState("");
   const [pricePerKg, setPricePerKg] = useState("");
   const [error, setError] = useState("");
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
+  const [existingProduct, setExistingProduct] = useState(null);
+
+  // Check if product exists when product name changes
+  useEffect(() => {
+    if (productName.trim() && productList) {
+      const matchingProduct = productList.find(
+        item => item.product.toLowerCase() === productName.trim().toLowerCase()
+      );
+
+      if (matchingProduct) {
+        setIsUpdateMode(true);
+        setExistingProduct(matchingProduct);
+        setPricePerKg(matchingProduct.price_per_kg.toString());
+      } else {
+        setIsUpdateMode(false);
+        setExistingProduct(null);
+      }
+    }
+  }, [productName, productList]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Validate inputs
     if (!productName.trim()) {
       setError("Product name is required");
       return;
     }
-    
+
     const price = Number(pricePerKg);
     if (isNaN(price) || price <= 0) {
       setError("Price must be a positive number");
       return;
     }
-    
-    // Add the new product
+
+    // Add or update the product
     onAddProduct({
       product: productName.trim(),
-      price_per_kg: price
+      price_per_kg: price,
+      isUpdate: isUpdateMode
     });
-    
+
     // Reset form
     setProductName("");
     setPricePerKg("");
     setError("");
+    setIsUpdateMode(false);
+    setExistingProduct(null);
     setIsOpen(false);
   };
 
@@ -47,7 +70,7 @@ const AddProduct = ({ onAddProduct }) => {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
           </svg>
-          Add New Product
+          Add / Update Product
         </motion.button>
       ) : (
         <AnimatePresence>
@@ -58,7 +81,9 @@ const AddProduct = ({ onAddProduct }) => {
             className="bg-gray-800/70 backdrop-blur-md rounded-xl shadow-xl p-4"
           >
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-white">Add New Product</h3>
+              <h3 className="text-lg font-medium text-white">
+                {isUpdateMode ? 'Update Product Price' : 'Add New Product'}
+              </h3>
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-400 hover:text-white"
@@ -68,7 +93,7 @@ const AddProduct = ({ onAddProduct }) => {
                 </svg>
               </button>
             </div>
-            
+
             {error && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -78,7 +103,17 @@ const AddProduct = ({ onAddProduct }) => {
                 {error}
               </motion.div>
             )}
-            
+
+            {isUpdateMode && !error && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mb-4 p-2 bg-yellow-500/20 border border-yellow-500/50 rounded text-yellow-200 text-sm"
+              >
+                Updating price for "{productName}"
+              </motion.div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -88,11 +123,14 @@ const AddProduct = ({ onAddProduct }) => {
                   type="text"
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isUpdateMode}
+                  className={`block w-full px-3 py-2 border border-gray-600 rounded-lg ${
+                    isUpdateMode ? 'bg-gray-800/50 text-gray-400' : 'bg-gray-700/50 text-white'
+                  } placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                   placeholder="Enter product name"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Price Per Kg (₹)
@@ -105,17 +143,21 @@ const AddProduct = ({ onAddProduct }) => {
                   placeholder="Enter price per kg"
                 />
               </div>
-              
+
               <div className="flex space-x-3">
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   type="submit"
-                  className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white font-medium rounded-lg shadow-lg hover:shadow-green-500/20 focus:outline-none"
+                  className={`px-4 py-2 bg-gradient-to-r ${
+                    isUpdateMode
+                      ? 'from-yellow-600 to-yellow-500 hover:shadow-yellow-500/20'
+                      : 'from-green-600 to-green-500 hover:shadow-green-500/20'
+                  } text-white font-medium rounded-lg shadow-lg focus:outline-none`}
                 >
-                  Add Product
+                  {isUpdateMode ? 'Update Price' : 'Add Product'}
                 </motion.button>
-                
+
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}

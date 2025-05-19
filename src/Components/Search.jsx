@@ -233,19 +233,30 @@ const Search = () => {
       </motion.div>
 
       <AddProduct
+        productList={productList}
         onAddProduct={(newProduct) => {
-          // Check if product with same name already exists
-          const exists = productList.some(
-            item => item.product.toLowerCase() === newProduct.product.toLowerCase()
-          );
+          if (newProduct.isUpdate) {
+            // Update existing product price
+            const updatedList = productList.map(item =>
+              item.product.toLowerCase() === newProduct.product.toLowerCase()
+                ? { ...item, price_per_kg: newProduct.price_per_kg }
+                : item
+            );
+            setProductList(updatedList);
+          } else {
+            // Check if product with same name already exists (fallback check)
+            const exists = productList.some(
+              item => item.product.toLowerCase() === newProduct.product.toLowerCase()
+            );
 
-          if (exists) {
-            alert(`Product "${newProduct.product}" already exists!`);
-            return;
+            if (exists) {
+              alert(`Product "${newProduct.product}" already exists! Use the update feature to change its price.`);
+              return;
+            }
+
+            // Add the new product to the list
+            setProductList([...productList, newProduct]);
           }
-
-          // Add the new product to the list
-          setProductList([...productList, newProduct]);
         }}
       />
 
