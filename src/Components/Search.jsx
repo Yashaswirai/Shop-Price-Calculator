@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Products from "./Products";
 import Calculation from "./Calculation";
 import AddProduct from "./AddProduct";
 
 const Search = () => {
-  const [productList, setProductList] = useState([
+  // Default product list to use if localStorage is empty
+  const defaultProductList = [
     { product: "Aata", price_per_kg: 38 },
     { product: "Maida", price_per_kg: 40 },
     { product: "Moong Dal", price_per_kg: 120 },
@@ -37,11 +38,47 @@ const Search = () => {
     { product: "Aachar", price_per_kg: 100 },
     { product: "Batasa", price_per_kg: 83 },
     { product: "Meetha", price_per_kg: 62 },
-  ]);
+  ];
+
+  // Initialize state with an empty array, will be populated in useEffect
+  const [productList, setProductList] = useState([]);
   const [value, setValue] = useState("");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [calculation, setCalculation] = useState({});
+
+  // Load products from localStorage on component mount
+  useEffect(() => {
+    try {
+      // Try to get products from localStorage
+      const storedProducts = localStorage.getItem('productList');
+
+      if (storedProducts) {
+        // If products exist in localStorage, use them
+        setProductList(JSON.parse(storedProducts));
+      } else {
+        // If no products in localStorage, use default list and save it
+        setProductList(defaultProductList);
+        localStorage.setItem('productList', JSON.stringify(defaultProductList));
+      }
+    } catch (error) {
+      // If there's an error (e.g., localStorage not available), use default list
+      console.error('Error accessing localStorage:', error);
+      setProductList(defaultProductList);
+    }
+  }, []);
+
+  // Save products to localStorage whenever the list changes
+  useEffect(() => {
+    // Only save if productList is not empty (to avoid overwriting on initial render)
+    if (productList.length > 0) {
+      try {
+        localStorage.setItem('productList', JSON.stringify(productList));
+      } catch (error) {
+        console.error('Error saving to localStorage:', error);
+      }
+    }
+  }, [productList]);
   const submitHandler = (e) => {
     e.preventDefault();
 
