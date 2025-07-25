@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Products from "./Products";
-import Calculation from "./Calculation";
 import AddProduct from "./AddProduct";
 
 const Search = () => {
@@ -67,10 +66,7 @@ const Search = () => {
       setProductList(defaultProductList);
     }
   }, []);
-
-  // Save products to localStorage whenever the list changes
   useEffect(() => {
-    // Only save if productList is not empty (to avoid overwriting on initial render)
     if (productList.length > 0) {
       try {
         localStorage.setItem('productList', JSON.stringify(productList));
@@ -79,6 +75,23 @@ const Search = () => {
       }
     }
   }, [productList]);
+
+  // Delete product function
+  const handleDeleteProduct = (productName) => {
+    const updatedList = productList.filter(
+      (item) => item.product.toLowerCase() !== productName.toLowerCase()
+    );
+    setProductList(updatedList);
+    
+    // Clear the search field if the deleted product was selected
+    if (value.toLowerCase() === productName.toLowerCase()) {
+      setValue("");
+      setPrice("");
+      setQuantity("");
+      setCalculation({});
+    }
+  };
+
   const submitHandler = (e) => {
     e.preventDefault();
 
@@ -102,29 +115,16 @@ const Search = () => {
     if (priceNum > 0 && quantityNum === 0) {
       // If price is provided but not quantity
       calculatedWeight = Math.floor((1000 / pricePerKg) * priceNum);
-      calculatedTotal = priceNum;
+      setQuantity(calculatedWeight)
     } else if (quantityNum > 0 && priceNum === 0) {
       // If quantity is provided but not price
       calculatedTotal = Math.ceil((pricePerKg / 1000) * quantityNum);
-      calculatedWeight = quantityNum;
+      setPrice(calculatedTotal)
     } else if (priceNum > 0 && quantityNum > 0) {
       // If both are provided, prioritize quantity calculation
       calculatedTotal = Math.ceil((pricePerKg / 1000) * quantityNum);
-      calculatedWeight = quantityNum;
+      setPrice(calculatedTotal)
     }
-
-    // Update calculation state for display
-    setCalculation({
-      product: commodity.product,
-      pricePerKg: pricePerKg,
-      price: calculatedTotal,
-      quantity: calculatedWeight,
-    });
-
-    // Reset form inputs
-    setValue("");
-    setPrice("");
-    setQuantity("");
   };
   return (
     <motion.div
@@ -260,8 +260,7 @@ const Search = () => {
         }}
       />
 
-      <Products val={value} setval={setValue} list={productList} />
-      <Calculation calc={calculation} />
+      <Products val={value} setval={setValue} list={productList} onDeleteProduct={handleDeleteProduct} />
     </motion.div>
   );
 };
