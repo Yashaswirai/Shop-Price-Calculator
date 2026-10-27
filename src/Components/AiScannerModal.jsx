@@ -14,6 +14,8 @@ import {
   Edit3,
   Trash2,
   Cpu,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
@@ -49,6 +51,7 @@ const AiScannerModal = ({
 
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [tempApiKey, setTempApiKey] = useState("");
+  const [showApiKeyText, setShowApiKeyText] = useState(false);
   const [selectedModel, setSelectedModel] = useState(() => {
     try {
       return localStorage.getItem("geminiSelectedModel") || "auto";
@@ -76,6 +79,7 @@ const AiScannerModal = ({
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const hasPreCheckedRef = useRef(false);
 
   // Reset all modal and scanner data
   const resetModalState = useCallback(() => {
@@ -92,10 +96,10 @@ const AiScannerModal = ({
     setShowKeyConfig(false);
   }, []);
 
-  // Handle model checking from Google ModelService
+  // Handle model checking from Google ModelService (stable callback: only depends on playUiSound)
   const handleCheckModels = useCallback(async (keyOverride = null) => {
-    const keyToUse = (keyOverride ?? tempApiKey ?? apiKey).trim();
-    if (!keyToUse) {
+    const cleanKey = (keyOverride || "").trim();
+    if (!cleanKey) {
       setModelCheckStatus("Please enter an API key first.");
       return;
     }
@@ -104,7 +108,7 @@ const AiScannerModal = ({
     setModelCheckStatus("Checking models via Google ModelService...");
 
     try {
-      const result = await fetchAvailableGeminiModels(keyToUse);
+      const result = await fetchAvailableGeminiModels(cleanKey);
       setAvailableModels(result.models);
       const rec = result.recommendedModel.replace(/^models\//, "");
       setModelCheckStatus(`✓ Found ${result.models.length} active models (Recommended: ${rec})`);
@@ -115,7 +119,7 @@ const AiScannerModal = ({
     } finally {
       setIsCheckingModels(false);
     }
-  }, [apiKey, tempApiKey, playUiSound]);
+  }, [playUiSound]);
 
   // Safe close handler that always clears session state
   const handleClose = useCallback(() => {
@@ -123,17 +127,26 @@ const AiScannerModal = ({
     onClose();
   }, [onClose, resetModalState]);
 
-  // Reset modal state when closed or opened & pre-check models if key exists
+  const prevIsOpenRef = useRef(isOpen);
+
+  // Synchronize on modal open / reset on close
   useEffect(() => {
-    if (!isOpen) {
-      resetModalState();
-    } else {
+    if (!prevIsOpenRef.current && isOpen) {
       setTempApiKey(apiKey);
-      if (apiKey && availableModels.length === 0) {
-        handleCheckModels(apiKey);
-      }
+    } else if (prevIsOpenRef.current && !isOpen) {
+      resetModalState();
+      hasPreCheckedRef.current = false;
     }
-  }, [isOpen, apiKey, availableModels.length, handleCheckModels, resetModalState]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, apiKey, resetModalState]);
+
+  // Pre-check models once when opened with an existing API key
+  useEffect(() => {
+    if (isOpen && apiKey && !hasPreCheckedRef.current) {
+      hasPreCheckedRef.current = true;
+      handleCheckModels(apiKey);
+    }
+  }, [isOpen, apiKey, handleCheckModels]);
 
   // Handle ESC key to cancel & reset
   useEffect(() => {
@@ -146,25 +159,55 @@ const AiScannerModal = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, handleClose]);
 
+  // Toggle key config drawer and synchronize temp key
+  const handleToggleKeyConfig = () => {
+    setShowKeyConfig((prev) => {
+      const next = !prev;
+      if (next) {
+        setTempApiKey(apiKey);
+      }
+      return next;
+    });
+  };
+
   // Sync API Key to localStorage & verify models
   const handleSaveApiKey = async (e) => {
-    e.preventDefault();
-    const key = tempApiKey.trim();
-    setApiKey(key);
+    if (e?.preventDefault) e.preventDefault();
+    const cleanKey = tempApiKey.trim();
+    setApiKey(cleanKey);
     try {
-      localStorage.setItem("geminiApiKey", key);
+      if (cleanKey) {
+        localStorage.setItem("geminiApiKey", cleanKey);
+      } else {
+        localStorage.removeItem("geminiApiKey");
+      }
     } catch {
       // ignore
     }
     playUiSound?.("success");
-    if (key) {
+    if (cleanKey) {
       onNotify?.("Gemini API key saved! Checking available models...", "success");
-      await handleCheckModels(key);
+      await handleCheckModels(cleanKey);
     } else {
       onNotify?.("API key cleared. Running in Demo mode.", "info");
       setAvailableModels([]);
       setModelCheckStatus("");
     }
+  };
+
+  // Clear saved API key
+  const handleClearApiKey = () => {
+    setTempApiKey("");
+    setApiKey("");
+    try {
+      localStorage.removeItem("geminiApiKey");
+    } catch {
+      // ignore
+    }
+    setAvailableModels([]);
+    setModelCheckStatus("");
+    playUiSound?.("delete");
+    onNotify?.("API key cleared. Running in Demo mode.", "info");
   };
 
   const handleModelChange = (modelId) => {
@@ -532,7 +575,7 @@ const AiScannerModal = ({
 
                 {/* API Key settings toggle */}
                 <button
-                  onClick={() => setShowKeyConfig(!showKeyConfig)}
+                  onClick={handleToggleKeyConfig}
                   className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
                     apiKey
                       ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
@@ -586,20 +629,62 @@ const AiScannerModal = ({
                       </a>
                     </div>
 
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        placeholder="Paste your Gemini API key (AIzaSy...)"
-                        value={tempApiKey}
-                        onChange={(e) => setTempApiKey(e.target.value)}
-                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer shrink-0"
-                      >
-                        Save Key
-                      </button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showApiKeyText ? "text" : "password"}
+                          placeholder="Paste your Gemini API key (AIzaSy...)"
+                          value={tempApiKey}
+                          onChange={(e) => setTempApiKey(e.target.value)}
+                          autoComplete="off"
+                          spellCheck="false"
+                          className="w-full pl-3 pr-16 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          {tempApiKey && (
+                            <button
+                              type="button"
+                              onClick={() => setTempApiKey("")}
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                              title="Clear text"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKeyText(!showApiKeyText)}
+                            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                            title={showApiKeyText ? "Hide key" : "Show key"}
+                          >
+                            {showApiKeyText ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="submit"
+                          className="flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Save Key
+                        </button>
+                        {apiKey && (
+                          <button
+                            type="button"
+                            onClick={handleClearApiKey}
+                            className="px-3 py-2 text-rose-600 hover:text-rose-700 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                            title="Remove saved API key"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </form>
 
@@ -626,7 +711,7 @@ const AiScannerModal = ({
 
                         <button
                           type="button"
-                          onClick={() => handleCheckModels()}
+                          onClick={() => handleCheckModels(tempApiKey)}
                           disabled={isCheckingModels || !tempApiKey.trim()}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                           title="Query Google ModelService for available models"
