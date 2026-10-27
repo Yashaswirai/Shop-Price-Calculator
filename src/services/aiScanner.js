@@ -46,13 +46,159 @@ export const SAMPLE_DOCUMENTS = [
 ];
 
 /**
- * Scan document using Google Gemini Vision API
+ * Preferred ranking order of Gemini models for multimodal OCR & extraction
+ */
+export const PREFERRED_MODEL_ORDER = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-exp",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-flash-002",
+  "gemini-1.5-flash-001",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+  "gemini-2.5-pro",
+  "gemini-2.0-pro-exp",
+  "gemini-1.5-pro-latest",
+  "gemini-1.5-pro",
+];
+
+/**
+ * Fallback candidate models if ModelService.ListModels is unavailable or restricted
+ */
+export const FALLBACK_MODEL_CANDIDATES = [
+  "models/gemini-2.0-flash",
+  "models/gemini-2.5-flash",
+  "models/gemini-1.5-flash-latest",
+  "models/gemini-1.5-flash",
+  "models/gemini-1.5-pro",
+];
+
+/**
+ * Format model name into a standard resource path (e.g. models/gemini-2.0-flash)
+ */
+export const formatModelPath = (modelName) => {
+  if (!modelName) return "models/gemini-2.0-flash";
+  return modelName.startsWith("models/") ? modelName : `models/${modelName}`;
+};
+
+/**
+ * Filter and sort available models by multimodal & content generation performance
+ */
+export const rankGeminiModels = (models = []) => {
+  const contentModels = models.filter(
+    (m) =>
+      Array.isArray(m.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes("generateContent")
+  );
+
+  return contentModels.sort((a, b) => {
+    const aId = (a.name || "").replace(/^models\//, "").toLowerCase();
+    const bId = (b.name || "").replace(/^models\//, "").toLowerCase();
+
+    const aIndex = PREFERRED_MODEL_ORDER.findIndex((p) => aId.includes(p.toLowerCase()));
+    const bIndex = PREFERRED_MODEL_ORDER.findIndex((p) => bId.includes(p.toLowerCase()));
+
+    const aRank = aIndex === -1 ? 999 : aIndex;
+    const bRank = bIndex === -1 ? 999 : bIndex;
+
+    if (aRank === bRank && aRank === 999) {
+      const aIsFlash = aId.includes("flash");
+      const bIsFlash = bId.includes("flash");
+      if (aIsFlash && !bIsFlash) return -1;
+      if (!aIsFlash && bIsFlash) return 1;
+      return aId.localeCompare(bId);
+    }
+
+    return aRank - bRank;
+  });
+};
+
+/**
+ * Query Google Gemini ModelService to list available models for an API key
+ * @param {string} apiKey - Google Gemini API Key
+ * @returns {Promise<{ models: Array, recommendedModel: string }>}
+ */
+export const fetchAvailableGeminiModels = async (apiKey) => {
+  if (!apiKey) {
+    throw new Error("Gemini API key is required to check available models.");
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message =
+      errorData?.error?.message ||
+      `Failed to list models from Gemini API (HTTP ${response.status}).`;
+    throw new Error(message);
+  }
+
+  const data = await response.json();
+  const rawModels = data.models || [];
+  const ranked = rankGeminiModels(rawModels);
+
+  if (ranked.length === 0) {
+    throw new Error("No Gemini models supporting 'generateContent' were found for this API key.");
+  }
+
+  return {
+    models: ranked.map((m) => ({
+      id: m.name,
+      displayName: m.displayName || m.name.replace(/^models\//, ""),
+      description: m.description || "",
+      supportedMethods: m.supportedGenerationMethods || [],
+    })),
+    recommendedModel: ranked[0].name,
+  };
+};
+
+/**
+ * Execute generateContent API call for a specific model
+ */
+export const callGeminiGenerateContent = async (modelPath, apiKey, requestBody) => {
+  const cleanPath = formatModelPath(modelPath);
+  const url = `https://generativelanguage.googleapis.com/v1beta/${cleanPath}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData?.error?.message || `API request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.model = cleanPath;
+    throw error;
+  }
+
+  return response.json();
+};
+
+/**
+ * Scan document using Google Gemini Vision API with dynamic model discovery and fallback
  * @param {string} base64Data - Base64 Data URL of the image
  * @param {Array} catalogue - Current catalogue product list
  * @param {string} apiKey - Gemini API Key
- * @returns {Promise<Array>} Extracted and matched items
+ * @param {string} preferredModel - Optional preferred model name or "auto"
+ * @param {Function} onStatusUpdate - Status update callback
+ * @returns {Promise<Array>} Extracted and matched items (with usedModel property)
  */
-export const scanWithGemini = async (base64Data, catalogue = [], apiKey = "") => {
+export const scanWithGemini = async (
+  base64Data,
+  catalogue = [],
+  apiKey = "",
+  preferredModel = "auto",
+  onStatusUpdate = null
+) => {
   if (!apiKey) {
     throw new Error("Gemini API key is required. Please provide a key in AI Settings.");
   }
@@ -111,8 +257,6 @@ The JSON must be an array of objects with the following structure:
   }
 ]`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-
   const requestBody = {
     contents: [
       {
@@ -133,22 +277,78 @@ The JSON must be an array of objects with the following structure:
     },
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
+  // Determine candidate models
+  let candidateModels = [];
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const message = errorData?.error?.message || `API request failed with status ${response.status}`;
-    throw new Error(message);
+  // 1. If preferredModel is specified and not "auto", try that first
+  if (preferredModel && preferredModel !== "auto") {
+    candidateModels.push(formatModelPath(preferredModel));
   }
 
-  const result = await response.json();
-  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+  // 2. Query available models dynamically from ModelService.ListModels
+  onStatusUpdate?.("Checking available models for your API key...");
+  try {
+    const modelInfo = await fetchAvailableGeminiModels(apiKey);
+    const discoveredIds = modelInfo.models.map((m) => m.id);
+    for (const id of discoveredIds) {
+      if (!candidateModels.includes(id)) {
+        candidateModels.push(id);
+      }
+    }
+  } catch (listErr) {
+    console.warn("ModelService list models check skipped/failed, using fallback candidates:", listErr);
+    for (const fb of FALLBACK_MODEL_CANDIDATES) {
+      if (!candidateModels.includes(fb)) {
+        candidateModels.push(fb);
+      }
+    }
+  }
+
+  // Ensure candidate models exist
+  if (candidateModels.length === 0) {
+    candidateModels = [...FALLBACK_MODEL_CANDIDATES];
+  }
+
+  let lastError = null;
+  let rawText = null;
+  let successfulModel = null;
+
+  // Try candidate models in order
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
+    const friendlyName = currentModel.replace(/^models\//, "");
+
+    onStatusUpdate?.(
+      i === 0
+        ? `Extracting items using ${friendlyName}...`
+        : `Switching to supported model: ${friendlyName}...`
+    );
+
+    try {
+      const result = await callGeminiGenerateContent(currentModel, apiKey, requestBody);
+      rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+      successfulModel = currentModel;
+      break;
+    } catch (err) {
+      lastError = err;
+      const isModelNotFoundError =
+        err.status === 404 ||
+        /not found|not supported for generatecontent|modelservice\.listmodels/i.test(err.message);
+
+      if (isModelNotFoundError && i < candidateModels.length - 1) {
+        console.warn(`Model ${currentModel} not supported for generateContent. Trying next candidate...`);
+        continue;
+      }
+
+      // If it's an authorization/quota error, stop early and throw
+      if (err.status === 400 || err.status === 401 || err.status === 403) {
+        throw err;
+      }
+    }
+  }
 
   if (!rawText) {
+    if (lastError) throw lastError;
     throw new Error("No readable text or products detected in the uploaded image.");
   }
 
@@ -162,7 +362,9 @@ The JSON must be an array of objects with the following structure:
   }
 
   // Post-process & guarantee semantic verification with local matcher
-  return normalizeScannedItems(items, catalogue);
+  const normalized = normalizeScannedItems(items, catalogue);
+  normalized.usedModel = successfulModel;
+  return normalized;
 };
 
 /**
@@ -179,7 +381,9 @@ export const scanSampleDocument = async (sampleId, catalogue = []) => {
     category: item.category,
   }));
 
-  return normalizeScannedItems(items, catalogue);
+  const normalized = normalizeScannedItems(items, catalogue);
+  normalized.usedModel = "sample-simulation";
+  return normalized;
 };
 
 /**

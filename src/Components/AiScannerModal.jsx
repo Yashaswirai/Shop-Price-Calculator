@@ -13,12 +13,14 @@ import {
   Plus,
   Edit3,
   Trash2,
+  Cpu,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   fileToBase64,
   scanWithGemini,
   scanSampleDocument,
+  fetchAvailableGeminiModels,
   SAMPLE_DOCUMENTS,
 } from "../services/aiScanner";
 import { findSemanticMatch } from "../utils/semanticMatcher";
@@ -47,6 +49,16 @@ const AiScannerModal = ({
 
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [tempApiKey, setTempApiKey] = useState("");
+  const [selectedModel, setSelectedModel] = useState(() => {
+    try {
+      return localStorage.getItem("geminiSelectedModel") || "auto";
+    } catch {
+      return "auto";
+    }
+  });
+  const [availableModels, setAvailableModels] = useState([]);
+  const [isCheckingModels, setIsCheckingModels] = useState(false);
+  const [modelCheckStatus, setModelCheckStatus] = useState("");
 
   const [imagePreview, setImagePreview] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -80,20 +92,48 @@ const AiScannerModal = ({
     setShowKeyConfig(false);
   }, []);
 
+  // Handle model checking from Google ModelService
+  const handleCheckModels = useCallback(async (keyOverride = null) => {
+    const keyToUse = (keyOverride ?? tempApiKey ?? apiKey).trim();
+    if (!keyToUse) {
+      setModelCheckStatus("Please enter an API key first.");
+      return;
+    }
+
+    setIsCheckingModels(true);
+    setModelCheckStatus("Checking models via Google ModelService...");
+
+    try {
+      const result = await fetchAvailableGeminiModels(keyToUse);
+      setAvailableModels(result.models);
+      const rec = result.recommendedModel.replace(/^models\//, "");
+      setModelCheckStatus(`✓ Found ${result.models.length} active models (Recommended: ${rec})`);
+      playUiSound?.("success");
+    } catch (err) {
+      setModelCheckStatus(`⚠️ ${err.message}`);
+      playUiSound?.("delete");
+    } finally {
+      setIsCheckingModels(false);
+    }
+  }, [apiKey, tempApiKey, playUiSound]);
+
   // Safe close handler that always clears session state
   const handleClose = useCallback(() => {
     resetModalState();
     onClose();
   }, [onClose, resetModalState]);
 
-  // Reset modal state when closed or opened
+  // Reset modal state when closed or opened & pre-check models if key exists
   useEffect(() => {
     if (!isOpen) {
       resetModalState();
     } else {
       setTempApiKey(apiKey);
+      if (apiKey && availableModels.length === 0) {
+        handleCheckModels(apiKey);
+      }
     }
-  }, [isOpen, apiKey, resetModalState]);
+  }, [isOpen, apiKey, availableModels.length, handleCheckModels, resetModalState]);
 
   // Handle ESC key to cancel & reset
   useEffect(() => {
@@ -106,8 +146,8 @@ const AiScannerModal = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, handleClose]);
 
-  // Sync API Key to localStorage
-  const handleSaveApiKey = (e) => {
+  // Sync API Key to localStorage & verify models
+  const handleSaveApiKey = async (e) => {
     e.preventDefault();
     const key = tempApiKey.trim();
     setApiKey(key);
@@ -116,9 +156,31 @@ const AiScannerModal = ({
     } catch {
       // ignore
     }
-    setShowKeyConfig(false);
     playUiSound?.("success");
-    onNotify?.(key ? "Gemini API key saved!" : "API key cleared. Running in Demo mode.", "success");
+    if (key) {
+      onNotify?.("Gemini API key saved! Checking available models...", "success");
+      await handleCheckModels(key);
+    } else {
+      onNotify?.("API key cleared. Running in Demo mode.", "info");
+      setAvailableModels([]);
+      setModelCheckStatus("");
+    }
+  };
+
+  const handleModelChange = (modelId) => {
+    setSelectedModel(modelId);
+    try {
+      localStorage.setItem("geminiSelectedModel", modelId);
+    } catch {
+      // ignore
+    }
+    playUiSound?.("click");
+    onNotify?.(
+      modelId === "auto"
+        ? "Vision Model set to Auto-Detect (Recommended)"
+        : `Selected model: ${modelId.replace(/^models\//, "")}`,
+      "info"
+    );
   };
 
   // Handle uploaded file
@@ -148,15 +210,20 @@ const AiScannerModal = ({
   // Process image with Gemini or Smart Fallback
   const processImage = async (base64) => {
     setIsScanning(true);
-    setScanProgress("Analyzing document with AI Vision...");
+    setScanProgress("Checking models and analyzing document...");
     setError("");
     setShowFallbackPrompt(false);
 
     try {
       let results = [];
       if (apiKey.trim()) {
-        setScanProgress("Extracting items & matching with catalogue...");
-        results = await scanWithGemini(base64, catalogue, apiKey.trim());
+        results = await scanWithGemini(
+          base64,
+          catalogue,
+          apiKey.trim(),
+          selectedModel,
+          (statusText) => setScanProgress(statusText)
+        );
       } else {
         // Fallback or demo notification
         setScanProgress("Reading items & matching synonyms via Semantic AI...");
@@ -173,6 +240,10 @@ const AiScannerModal = ({
 
       setScannedResults(results);
       playUiSound?.("success");
+      if (results.usedModel) {
+        const friendly = results.usedModel.replace(/^models\//, "");
+        onNotify?.(`Extracted items using ${friendly}`, "success");
+      }
     } catch (err) {
       setError(err.message || "AI was unable to understand or extract items from this document.");
       setShowFallbackPrompt(true);
@@ -467,11 +538,11 @@ const AiScannerModal = ({
                       ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
                       : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600"
                   }`}
-                  title="Configure Gemini API Key"
+                  title="Configure Gemini API Key & Vision Models"
                 >
                   <Key className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">
-                    {apiKey ? "API Key Set" : "AI Key"}
+                    {apiKey ? (selectedModel !== "auto" ? selectedModel.replace(/^models\//, "") : "AI Models") : "AI Key"}
                   </span>
                 </button>
 
@@ -485,21 +556,21 @@ const AiScannerModal = ({
               </div>
             </div>
 
-            {/* API Key Drawer */}
+            {/* API Key & Model Configuration Drawer */}
             <AnimatePresence>
               {showKeyConfig && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="bg-emerald-950/10 dark:bg-emerald-950/20 border-b border-emerald-500/20 px-4 sm:px-6 py-3.5 overflow-hidden shrink-0"
+                  className="bg-emerald-950/10 dark:bg-emerald-950/20 border-b border-emerald-500/20 px-4 sm:px-6 py-3.5 overflow-hidden shrink-0 space-y-3"
                 >
                   <form onSubmit={handleSaveApiKey} className="space-y-2.5">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5">
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                           <Key className="w-3.5 h-3.5" />
-                          Google Gemini Vision API Key
+                          Google Gemini Vision API Key & Model
                         </h4>
                         <p className="text-[11px] text-gray-600 dark:text-gray-400">
                           Enables live real-time OCR extraction for uploaded camera photos and paper bills.
@@ -531,6 +602,47 @@ const AiScannerModal = ({
                       </button>
                     </div>
                   </form>
+
+                  {/* Model Selection & Auto-Detection Row */}
+                  <div className="pt-2 border-t border-emerald-500/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 mb-1">
+                        <Cpu className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Active Gemini Vision Model:
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedModel}
+                          onChange={(e) => handleModelChange(e.target.value)}
+                          className="flex-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                        >
+                          <option value="auto">✨ Auto-Detect Best Active Model (Recommended)</option>
+                          {availableModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.displayName} ({m.id.replace(/^models\//, "")})
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCheckModels()}
+                          disabled={isCheckingModels || !tempApiKey.trim()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                          title="Query Google ModelService for available models"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isCheckingModels ? "animate-spin" : ""}`} />
+                          <span className="hidden sm:inline">{isCheckingModels ? "Checking..." : "Check Models"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {modelCheckStatus && (
+                    <div className="text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                      {modelCheckStatus}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -667,6 +779,20 @@ const AiScannerModal = ({
                   </div>
 
                   <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 pt-1 sm:pl-10">
+                    {/model|modelservice|api version|not found|supported/i.test(error) && (
+                      <button
+                        onClick={() => {
+                          setShowKeyConfig(true);
+                          handleCheckModels(apiKey);
+                          playUiSound?.("click");
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Check & Switch Supported Models
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         setIsManualFormOpen(true);

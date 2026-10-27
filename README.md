@@ -20,6 +20,8 @@ An ultra-interactive, modern web application for calculating prices and quantiti
 - **Automatic Discovery of New Products**: Any product detected on the bill that doesn't exist in the catalogue is identified and added as a new entry.
 - **Google Gemini Vision & Built-in Smart Semantic AI**:
   - Connect your Gemini API Key directly in the UI for live multimodal document extraction.
+  - **Dynamic Model Discovery (`ModelService.ListModels`)**: Dynamically queries Google Gemini to inspect available vision models for your API key (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash-latest`, etc.), auto-selects the fastest multimodal model, and gracefully auto-retries if a model is deprecated or unsupported.
+  - **Model Selection & Verification**: Manually select from verified active models or let AI auto-detect the best available version.
   - Or use the built-in Semantic AI Matcher and sample wholesale bills for instant offline testing.
 - **Interactive Review Table**: Review detected items, semantic match notes, old vs. new rates, and select which items to update before applying.
 
