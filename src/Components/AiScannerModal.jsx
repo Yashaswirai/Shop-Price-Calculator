@@ -21,9 +21,7 @@ import confetti from "canvas-confetti";
 import {
   fileToBase64,
   scanWithGemini,
-  scanSampleDocument,
   fetchAvailableGeminiModels,
-  SAMPLE_DOCUMENTS,
 } from "../services/aiScanner";
 import { findSemanticMatch } from "../utils/semanticMatcher";
 import { formatCurrency } from "../utils/formatters";
@@ -189,7 +187,7 @@ const AiScannerModal = ({
       onNotify?.("Gemini API key saved! Checking available models...", "success");
       await handleCheckModels(cleanKey);
     } else {
-      onNotify?.("API key cleared. Running in Demo mode.", "info");
+      onNotify?.("API key cleared. Running in manual mode.", "info");
       setAvailableModels([]);
       setModelCheckStatus("");
     }
@@ -207,7 +205,7 @@ const AiScannerModal = ({
     setAvailableModels([]);
     setModelCheckStatus("");
     playUiSound?.("delete");
-    onNotify?.("API key cleared. Running in Demo mode.", "info");
+    onNotify?.("API key cleared. Running in manual mode.", "info");
   };
 
   const handleModelChange = (modelId) => {
@@ -250,7 +248,7 @@ const AiScannerModal = ({
     }
   };
 
-  // Process image with Gemini or Smart Fallback
+  // Process image with Gemini or prompt for API key / manual entry
   const processImage = async (base64) => {
     setIsScanning(true);
     setScanProgress("Checking models and analyzing document...");
@@ -258,24 +256,20 @@ const AiScannerModal = ({
     setShowFallbackPrompt(false);
 
     try {
-      let results = [];
-      if (apiKey.trim()) {
-        results = await scanWithGemini(
-          base64,
-          catalogue,
-          apiKey.trim(),
-          selectedModel,
-          (statusText) => setScanProgress(statusText)
-        );
-      } else {
-        // Fallback or demo notification
-        setScanProgress("Reading items & matching synonyms via Semantic AI...");
-        results = await scanSampleDocument("sample_grocery_bill", catalogue);
-        onNotify?.(
-          "Processed via Built-in Semantic AI Matcher! (Add Gemini API key in settings for live camera OCR).",
-          "info"
+      if (!apiKey.trim()) {
+        setShowKeyConfig(true);
+        throw new Error(
+          "Gemini API key is required to scan documents. Please enter your API key in settings (top right 'AI Key' button) or enter items manually."
         );
       }
+
+      const results = await scanWithGemini(
+        base64,
+        catalogue,
+        apiKey.trim(),
+        selectedModel,
+        (statusText) => setScanProgress(statusText)
+      );
 
       if (!results || results.length === 0) {
         throw new Error("No readable grocery products or prices could be extracted from this document.");
@@ -291,28 +285,6 @@ const AiScannerModal = ({
       setError(err.message || "AI was unable to understand or extract items from this document.");
       setShowFallbackPrompt(true);
       playUiSound?.("delete");
-    } finally {
-      setIsScanning(false);
-      setScanProgress("");
-    }
-  };
-
-  // Try sample bill
-  const handleTrySample = async (sampleId) => {
-    try {
-      playUiSound?.("click");
-      setError("");
-      setShowFallbackPrompt(false);
-      setIsScanning(true);
-      setScanProgress("Loading sample bill & matching products with AI...");
-      setImagePreview(null);
-
-      const results = await scanSampleDocument(sampleId, catalogue);
-      setScannedResults(results);
-      playUiSound?.("success");
-    } catch (err) {
-      setError(err.message || "Failed to load sample document.");
-      setShowFallbackPrompt(true);
     } finally {
       setIsScanning(false);
       setScanProgress("");
@@ -903,13 +875,6 @@ const AiScannerModal = ({
                       <Camera className="w-3.5 h-3.5" />
                       Take Another Photo
                     </button>
-
-                    <button
-                      onClick={() => handleTrySample("sample_grocery_bill")}
-                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
-                    >
-                      Use Sample Bill
-                    </button>
                   </div>
                 </motion.div>
               )}
@@ -949,6 +914,7 @@ const AiScannerModal = ({
                         <img
                           src={imagePreview}
                           alt="Uploaded receipt"
+                          loading="lazy"
                           className="max-h-48 mx-auto rounded-xl object-contain shadow-md"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1012,37 +978,6 @@ const AiScannerModal = ({
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Sample Bills for Quick Demo */}
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/60 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-                        Try Instant Demo Invoices
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {SAMPLE_DOCUMENTS.map((sample) => (
-                        <button
-                          key={sample.id}
-                          onClick={() => handleTrySample(sample.id)}
-                          className="flex items-start gap-2.5 p-2.5 sm:p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-emerald-500 text-left transition-all cursor-pointer group"
-                        >
-                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <FileText className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h5 className="font-bold text-xs text-gray-900 dark:text-white truncate">
-                              {sample.name}
-                            </h5>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">
-                              {sample.desc}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </div>
               )}

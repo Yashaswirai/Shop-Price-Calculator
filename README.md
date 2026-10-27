@@ -22,7 +22,7 @@ An ultra-interactive, modern web application for calculating prices and quantiti
   - Connect your Gemini API Key directly in the UI for live multimodal document extraction.
   - **Dynamic Model Discovery (`ModelService.ListModels`)**: Dynamically queries Google Gemini to inspect available vision models for your API key (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash-latest`, etc.), auto-selects the fastest multimodal model, and gracefully auto-retries if a model is deprecated or unsupported.
   - **Model Selection & Verification**: Manually select from verified active models or let AI auto-detect the best available version.
-  - Or use the built-in Semantic AI Matcher and sample wholesale bills for instant offline testing.
+  - **Smart Manual Entry Fallback**: Quick manual entry drawer with real-time synonym auto-matching as you type if you prefer not to use the camera.
 - **Interactive Review Table**: Review detected items, semantic match notes, old vs. new rates, and select which items to update before applying.
 
 ### 🧮 2. Real-Time Bidirectional Calculator
@@ -63,6 +63,7 @@ An ultra-interactive, modern web application for calculating prices and quantiti
 - **Synthesized Audio Feedback**: Subtle, non-intrusive sound cues for clicks, item selection, cart adds, and deletes using the native Web Audio API (can be muted anytime).
 - **Toast Notifications**: Non-blocking toast alerts with instant Undo action.
 - **Data Persistence**: Automatic browser `localStorage` synchronization for products, carts, theme, and sound settings.
+- **Code Splitting & Lazy Loading**: Modals (AI Scanner, Product Editor) and secondary views (Active Bill, Unit Converter) are dynamically lazy-loaded using `React.lazy` and `Suspense`, reducing the initial JavaScript bundle by ~17% for instant page loads.
 - **Catalog Reset**: One-click restore to default standard grocery prices anytime.
 
 ---

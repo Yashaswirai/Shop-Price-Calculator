@@ -1,15 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import Products from "./Products";
 import Calculator from "./Calculator";
-import ProductModal from "./ProductModal";
-import ShoppingBill from "./ShoppingBill";
-import UnitConverter from "./UnitConverter";
 import Toast from "./Toast";
-import AiScannerModal from "./AiScannerModal";
 import { defaultProductList } from "../data/defaultProducts";
 import { getCategoryForProduct } from "../utils/categories";
 import { playSound } from "../utils/audio";
+
+// Lazy-loaded secondary components for code splitting & faster initial paint
+const ProductModal = lazy(() => import("./ProductModal"));
+const ShoppingBill = lazy(() => import("./ShoppingBill"));
+const UnitConverter = lazy(() => import("./UnitConverter"));
+const AiScannerModal = lazy(() => import("./AiScannerModal"));
+
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center py-12 sm:py-16 text-emerald-600 dark:text-emerald-400">
+    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 text-xs font-semibold">
+      <div className="w-4 h-4 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+      <span className="text-gray-700 dark:text-gray-300">Loading module...</span>
+    </div>
+  </div>
+);
 
 const Search = ({
   activeTab = "calculator",
@@ -28,13 +39,24 @@ const Search = ({
   // Modals & Editing
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [hasOpenedProductModal, setHasOpenedProductModal] = useState(false);
 
   // AI Scanner state fallback
   const [internalIsAiScannerOpen, setInternalIsAiScannerOpen] = useState(false);
+  const [hasOpenedAiScanner, setHasOpenedAiScanner] = useState(false);
   const isAiScannerOpen =
     externalIsAiScannerOpen !== undefined ? externalIsAiScannerOpen : internalIsAiScannerOpen;
   const setIsAiScannerOpen =
     externalSetIsAiScannerOpen !== undefined ? externalSetIsAiScannerOpen : setInternalIsAiScannerOpen;
+
+  // On-demand chunk loading triggers for modals
+  useEffect(() => {
+    if (isModalOpen) setHasOpenedProductModal(true);
+  }, [isModalOpen]);
+
+  useEffect(() => {
+    if (isAiScannerOpen) setHasOpenedAiScanner(true);
+  }, [isAiScannerOpen]);
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -359,7 +381,7 @@ const Search = ({
         </motion.div>
       )}
 
-      {/* Tab 2: Shopping Bill */}
+      {/* Tab 2: Shopping Bill (Lazy Loaded) */}
       {activeTab === "bill" && (
         <motion.div
           key="bill-tab"
@@ -368,19 +390,21 @@ const Search = ({
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          <ShoppingBill
-            cart={cart}
-            onUpdateCartItem={handleUpdateCartItem}
-            onRemoveCartItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onBackToCalculator={() => setActiveTab("calculator")}
-            playUiSound={playUiSound}
-            onNotify={showToast}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <ShoppingBill
+              cart={cart}
+              onUpdateCartItem={handleUpdateCartItem}
+              onRemoveCartItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              onBackToCalculator={() => setActiveTab("calculator")}
+              playUiSound={playUiSound}
+              onNotify={showToast}
+            />
+          </Suspense>
         </motion.div>
       )}
 
-      {/* Tab 3: Unit Converter */}
+      {/* Tab 3: Unit Converter (Lazy Loaded) */}
       {activeTab === "converter" && (
         <motion.div
           key="converter-tab"
@@ -389,32 +413,42 @@ const Search = ({
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          <UnitConverter playUiSound={playUiSound} />
+          <Suspense fallback={<LoadingFallback />}>
+            <UnitConverter playUiSound={playUiSound} />
+          </Suspense>
         </motion.div>
       )}
 
-      {/* Add / Edit Product Modal */}
-      <ProductModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingProduct(null);
-        }}
-        onSaveProduct={handleSaveProduct}
-        initialProduct={editingProduct}
-        existingProducts={productList}
-        playUiSound={playUiSound}
-      />
+      {/* Add / Edit Product Modal (Lazy Loaded on demand) */}
+      {hasOpenedProductModal && (
+        <Suspense fallback={null}>
+          <ProductModal
+            isOpen={isModalOpen}
+            onClose={() => {
+              setIsModalOpen(false);
+              setEditingProduct(null);
+            }}
+            onSaveProduct={handleSaveProduct}
+            initialProduct={editingProduct}
+            existingProducts={productList}
+            playUiSound={playUiSound}
+          />
+        </Suspense>
+      )}
 
-      {/* AI Document & Bill Scanner Modal */}
-      <AiScannerModal
-        isOpen={isAiScannerOpen}
-        onClose={() => setIsAiScannerOpen(false)}
-        catalogue={productList}
-        onApplyUpdates={handleApplyAiUpdates}
-        playUiSound={playUiSound}
-        onNotify={showToast}
-      />
+      {/* AI Document & Bill Scanner Modal (Lazy Loaded on demand) */}
+      {hasOpenedAiScanner && (
+        <Suspense fallback={null}>
+          <AiScannerModal
+            isOpen={isAiScannerOpen}
+            onClose={() => setIsAiScannerOpen(false)}
+            catalogue={productList}
+            onApplyUpdates={handleApplyAiUpdates}
+            playUiSound={playUiSound}
+            onNotify={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Toast Notifications */}
       <Toast toasts={toasts} onDismiss={dismissToast} onUndo={handleUndo} />

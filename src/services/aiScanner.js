@@ -14,38 +14,6 @@ export const fileToBase64 = (file) => {
 };
 
 /**
- * Built-in Sample Invoices for Instant Testing
- */
-export const SAMPLE_DOCUMENTS = [
-  {
-    id: "sample_grocery_bill",
-    name: "Sample Grocery Wholesale Bill",
-    desc: "Contains Flour, Sugar, Cumin, Mustard Oil, and new items like Tea (Chai) and Turmeric (Haldi)",
-    items: [
-      { detected_name: "Wheat Flour (Chakki)", price_per_kg: 42, detected_qty: "1 kg", category: "Grains & Flours" },
-      { detected_name: "Refined White Sugar", price_per_kg: 54, detected_qty: "1 kg", category: "Snacks & Sweets" },
-      { detected_name: "Whole Cumin Seeds", price_per_kg: 520, detected_qty: "1 kg", category: "Spices & Seasoning" },
-      { detected_name: "Pure Mustard Oil", price_per_kg: 185, detected_qty: "1 Litre", category: "Oils & Ghee" },
-      { detected_name: "Red Lentils (Masoor)", price_per_kg: 115, detected_qty: "1 kg", category: "Dals & Pulses" },
-      { detected_name: "Turmeric Powder (Haldi)", price_per_kg: 240, detected_qty: "500g", category: "Spices & Seasoning" },
-      { detected_name: "Premium Assam Tea", price_per_kg: 360, detected_qty: "250g", category: "Other Essentials" },
-    ],
-  },
-  {
-    id: "sample_supermarket_receipt",
-    name: "Sample Supermarket Receipt",
-    desc: "Contains All Purpose Flour, Basmati Rice, Toor Dal, Almonds, and Green Cardamom",
-    items: [
-      { detected_name: "All Purpose Flour", price_per_kg: 45, detected_qty: "1 kg", category: "Grains & Flours" },
-      { detected_name: "Basmati Rice Premium", price_per_kg: 62, detected_qty: "1 kg", category: "Grains & Flours" },
-      { detected_name: "Yellow Pigeon Pea (Toor Dal)", price_per_kg: 135, detected_qty: "1 kg", category: "Dals & Pulses" },
-      { detected_name: "California Almonds", price_per_kg: 175, detected_qty: "500g", category: "Snacks & Sweets" },
-      { detected_name: "Green Cardamom (Elaichi)", price_per_kg: 2200, detected_qty: "100g", category: "Spices & Seasoning" },
-    ],
-  },
-];
-
-/**
  * Preferred ranking order of Gemini models for multimodal OCR & extraction
  */
 export const PREFERRED_MODEL_ORDER = [
@@ -364,25 +332,6 @@ The JSON must be an array of objects with the following structure:
   // Post-process & guarantee semantic verification with local matcher
   const normalized = normalizeScannedItems(items, catalogue);
   normalized.usedModel = successfulModel;
-  return normalized;
-};
-
-/**
- * Scan sample or simulate local extraction with intelligent semantic matcher
- */
-export const scanSampleDocument = async (sampleId, catalogue = []) => {
-  const sample = SAMPLE_DOCUMENTS.find((s) => s.id === sampleId) || SAMPLE_DOCUMENTS[0];
-  // Simulate brief scanning delay for delightful UX
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  const items = sample.items.map((item) => ({
-    detected_name: item.detected_name,
-    price_per_kg: Math.ceil(item.price_per_kg),
-    category: item.category,
-  }));
-
-  const normalized = normalizeScannedItems(items, catalogue);
-  normalized.usedModel = "sample-simulation";
   return normalized;
 };
 
