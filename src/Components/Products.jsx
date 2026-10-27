@@ -11,6 +11,7 @@ import {
   List,
   CheckCircle,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import { CATEGORIES, getCategoryForProduct, getCategoryBadgeStyle } from "../utils/categories";
 
@@ -21,6 +22,7 @@ const Products = ({
   onOpenAddModal,
   onEditProduct,
   onDeleteProduct,
+  onOpenAiScanner,
   playUiSound,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -158,13 +160,26 @@ const Products = ({
               </button>
             </div>
 
+            {/* AI Scanner Trigger */}
+            <button
+              onClick={() => {
+                playUiSound?.("click");
+                onOpenAiScanner?.();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-sm transition-all cursor-pointer shrink-0"
+              title="Scan documents, bills, or price tags with AI"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">AI Scan</span>
+            </button>
+
             {/* Add Product Button */}
             <button
               onClick={() => {
                 playUiSound?.("click");
                 onOpenAddModal();
               }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 shadow-sm transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Product</span>

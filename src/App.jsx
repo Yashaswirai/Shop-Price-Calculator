@@ -28,6 +28,9 @@ const App = () => {
   // Active tab state: "calculator" | "bill" | "converter"
   const [activeTab, setActiveTab] = useState("calculator");
 
+  // AI Scanner modal state
+  const [isAiScannerOpen, setIsAiScannerOpen] = useState(false);
+
   // Cart summary for navbar badge
   const [cartCount, setCartCount] = useState(0);
   const [cartTotal, setCartTotal] = useState(0);
@@ -111,6 +114,7 @@ const App = () => {
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
           onResetCatalog={handleResetCatalog}
+          onOpenAiScanner={() => setIsAiScannerOpen(true)}
           playUiSound={playUiSound}
         />
 
@@ -120,6 +124,8 @@ const App = () => {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             soundEnabled={soundEnabled}
+            isAiScannerOpen={isAiScannerOpen}
+            setIsAiScannerOpen={setIsAiScannerOpen}
           />
         </main>
 

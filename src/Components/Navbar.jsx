@@ -23,6 +23,7 @@ const Navbar = ({
   soundEnabled,
   setSoundEnabled,
   onResetCatalog,
+  onOpenAiScanner,
   playUiSound,
 }) => {
   return (
@@ -59,6 +60,22 @@ const Navbar = ({
 
           {/* Controls & Quick Cart Button */}
           <div className="flex items-center gap-2 md:gap-3">
+            {/* AI Scanner Button */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                playUiSound("click");
+                onOpenAiScanner?.();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs md:text-sm font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-sm transition-all cursor-pointer"
+              title="AI Document & Bill Scanner"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">AI Scanner</span>
+              <span className="sm:hidden">AI</span>
+            </motion.button>
+
             {/* Active Bill / Cart Pill */}
             <motion.button
               whileHover={{ scale: 1.03 }}

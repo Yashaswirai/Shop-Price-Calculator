@@ -1,16 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Products from "./Products";
 import Calculator from "./Calculator";
 import ProductModal from "./ProductModal";
 import ShoppingBill from "./ShoppingBill";
 import UnitConverter from "./UnitConverter";
 import Toast from "./Toast";
+import AiScannerModal from "./AiScannerModal";
 import { defaultProductList } from "../data/defaultProducts";
 import { getCategoryForProduct } from "../utils/categories";
 import { playSound } from "../utils/audio";
 
-const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true }) => {
+const Search = ({
+  activeTab = "calculator",
+  setActiveTab,
+  soundEnabled = true,
+  isAiScannerOpen: externalIsAiScannerOpen,
+  setIsAiScannerOpen: externalSetIsAiScannerOpen,
+}) => {
   // Products state
   const [productList, setProductList] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -21,6 +28,13 @@ const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true })
   // Modals & Editing
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // AI Scanner state fallback
+  const [internalIsAiScannerOpen, setInternalIsAiScannerOpen] = useState(false);
+  const isAiScannerOpen =
+    externalIsAiScannerOpen !== undefined ? externalIsAiScannerOpen : internalIsAiScannerOpen;
+  const setIsAiScannerOpen =
+    externalSetIsAiScannerOpen !== undefined ? externalSetIsAiScannerOpen : setInternalIsAiScannerOpen;
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -174,16 +188,63 @@ const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true })
     setIsModalOpen(true);
   };
 
+  // Apply updates extracted from AI Scanner
+  const handleApplyAiUpdates = ({ updates = [], additions = [] }) => {
+    setProductList((prev) => {
+      // 1. Update prices of existing products
+      let updatedList = prev.map((item) => {
+        const match = updates.find(
+          (u) => u.product.toLowerCase() === item.product.toLowerCase()
+        );
+        if (match) {
+          return {
+            ...item,
+            price_per_kg: match.price_per_kg,
+            category: match.category || item.category,
+          };
+        }
+        return item;
+      });
+
+      // 2. Prepend newly discovered products
+      const newEntries = additions
+        .filter(
+          (newItem) =>
+            !updatedList.some(
+              (p) => p.product.toLowerCase() === newItem.product.toLowerCase()
+            )
+        )
+        .map((newItem) => ({
+          product: newItem.product,
+          price_per_kg: newItem.price_per_kg,
+          category: newItem.category || getCategoryForProduct(newItem.product),
+        }));
+
+      return [...newEntries, ...updatedList];
+    });
+
+    // Update active product rate if it was updated
+    if (selectedProduct) {
+      const match = updates.find(
+        (u) => u.product.toLowerCase() === selectedProduct.product.toLowerCase()
+      );
+      if (match) {
+        setSelectedProduct((prev) => ({
+          ...prev,
+          price_per_kg: match.price_per_kg,
+        }));
+      }
+    }
+  };
+
   // Cart operations
   const handleAddToCart = (cartItem) => {
     setCart((prev) => {
-      // Check if identical product with same rate is already in cart
       const existingIdx = prev.findIndex(
         (i) => i.product.toLowerCase() === cartItem.product.toLowerCase()
       );
 
       if (existingIdx >= 0) {
-        // Merge quantities
         const updated = [...prev];
         const existing = updated[existingIdx];
         const combinedQty = existing.quantityGrams + cartItem.quantityGrams;
@@ -276,7 +337,7 @@ const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true })
                   Grocery Catalog
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Click any product to load into calculator. Edit rates or add custom products.
+                  Click any product to load into calculator. Edit rates, add custom products, or scan receipts with AI.
                 </p>
               </div>
             </div>
@@ -291,6 +352,7 @@ const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true })
               }}
               onEditProduct={handleEditProduct}
               onDeleteProduct={handleDeleteProduct}
+              onOpenAiScanner={() => setIsAiScannerOpen(true)}
               playUiSound={playUiSound}
             />
           </section>
@@ -342,6 +404,16 @@ const Search = ({ activeTab = "calculator", setActiveTab, soundEnabled = true })
         initialProduct={editingProduct}
         existingProducts={productList}
         playUiSound={playUiSound}
+      />
+
+      {/* AI Document & Bill Scanner Modal */}
+      <AiScannerModal
+        isOpen={isAiScannerOpen}
+        onClose={() => setIsAiScannerOpen(false)}
+        catalogue={productList}
+        onApplyUpdates={handleApplyAiUpdates}
+        playUiSound={playUiSound}
+        onNotify={showToast}
       />
 
       {/* Toast Notifications */}
