@@ -1,205 +1,415 @@
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search as SearchIcon,
+  X,
+  Plus,
+  Edit2,
+  Trash2,
+  ArrowUpDown,
+  LayoutGrid,
+  List,
+  CheckCircle,
+  Tag,
+} from "lucide-react";
+import { CATEGORIES, getCategoryForProduct, getCategoryBadgeStyle } from "../utils/categories";
 
-const Products = ({ val, setval, list, onDeleteProduct }) => {
-  const [filteredProduct, setFilteredProduct] = useState(list);
+const Products = ({
+  productList = [],
+  selectedProduct,
+  onSelectProduct,
+  onOpenAddModal,
+  onEditProduct,
+  onDeleteProduct,
+  playUiSound,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
 
-  useEffect(() => {
-    if (!list || list.length === 0) {
-      setFilteredProduct([]);
-    } else {
-      setFilteredProduct(
-        list.filter((item) =>
-          item.product.toLowerCase().includes(val.toLowerCase())
-        )
+  // Filter and sort products
+  const filteredAndSorted = useMemo(() => {
+    let result = [...productList];
+
+    // Filter by search
+    if (searchTerm.trim()) {
+      const query = searchTerm.toLowerCase().trim();
+      result = result.filter((item) =>
+        item.product.toLowerCase().includes(query)
       );
     }
-  }, [val, list]);
 
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-      },
-    },
-  };
+    // Filter by category
+    if (selectedCategory !== "all") {
+      result = result.filter((item) => {
+        const cat = item.category || getCategoryForProduct(item.product);
+        return cat === selectedCategory;
+      });
+    }
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-  };
+    // Sort
+    result.sort((a, b) => {
+      if (sortBy === "name-asc") {
+        return a.product.localeCompare(b.product);
+      }
+      if (sortBy === "name-desc") {
+        return b.product.localeCompare(a.product);
+      }
+      if (sortBy === "price-asc") {
+        return a.price_per_kg - b.price_per_kg;
+      }
+      if (sortBy === "price-desc") {
+        return b.price_per_kg - a.price_per_kg;
+      }
+      return 0;
+    });
 
-  const handleDeleteProduct = (e, productName) => {
-    e.stopPropagation(); // Prevent the click from selecting the product
-    onDeleteProduct(productName);
-  };
+    return result;
+  }, [productList, searchTerm, selectedCategory, sortBy]);
+
+  // Count items per category
+  const categoryCounts = useMemo(() => {
+    const counts = { all: productList.length };
+    productList.forEach((item) => {
+      const cat = item.category || getCategoryForProduct(item.product);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [productList]);
 
   return (
-    <motion.div
-      className="w-full mt-4 max-h-[300px] overflow-y-auto overflow-x-hidden rounded-lg bg-gray-800/50 p-2 backdrop-blur-sm no-scrollbar"
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
-    >
-      <h3 className="text-lg font-medium text-white mb-2 px-2">
-        {val ? `Search results for "${val}"` : "All Products"}
-      </h3>
-
-      <AnimatePresence>
-        {filteredProduct && filteredProduct.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2">
-            {filteredProduct.map((item, idx) => (
-              <motion.div
-                key={idx}
-                variants={itemVariants}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-gradient-to-r from-green-600/80 to-green-500/80 rounded-lg p-3 cursor-pointer shadow-md relative group"
-                onClick={() => setval(item.product)}
+    <div className="space-y-4">
+      {/* Search, Filter & Actions Top Bar */}
+      <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+              <SearchIcon className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search products (e.g. Aata, Chawal, Moong)..."
+              className="w-full pl-10 pr-9 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  playUiSound?.("click");
+                  setSearchTerm("");
+                }}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
               >
-                <div className="flex justify-between items-center flex-wrap">
-                  <div className="flex items-center min-w-0 mr-2">
-                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-green-800 flex items-center justify-center mr-3">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-white"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path
-                          fillRule="evenodd"
-                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="text-white font-medium truncate">
-                      {item.product}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="bg-green-800/50 px-3 py-1 rounded-full flex-shrink-0">
-                      <p className="text-white font-semibold">
-                        ₹{item.price_per_kg}
-                      </p>
-                      <p className="text-xs text-green-200">per kg</p>
-                    </div>
-                    {/* Delete Button */}
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={(e) => handleDeleteProduct(e, item.product)}
-                      className="opacity-100 bg-red-600 text-white p-2 rounded-full shadow-lg"
-                      title={`Delete ${item.product}`}
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort Selector */}
+          <div className="flex items-center gap-2">
+            <div className="relative shrink-0">
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  playUiSound?.("click");
+                  setSortBy(e.target.value);
+                }}
+                className="pl-3 pr-8 py-2.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="name-asc">Alphabetical (A - Z)</option>
+                <option value="name-desc">Alphabetical (Z - A)</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+              </select>
+            </div>
+
+            {/* View Mode Grid/List */}
+            <div className="hidden sm:flex rounded-xl bg-gray-100 dark:bg-gray-700 p-1">
+              <button
+                onClick={() => {
+                  playUiSound?.("click");
+                  setViewMode("grid");
+                }}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                }`}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  playUiSound?.("click");
+                  setViewMode("list");
+                }}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                }`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Add Product Button */}
+            <button
+              onClick={() => {
+                playUiSound?.("click");
+                onOpenAddModal();
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Product</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
+          {CATEGORIES.map((cat) => {
+            const count = categoryCounts[cat.id] || 0;
+            const isSelected = selectedCategory === cat.id;
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  playUiSound?.("click");
+                  setSelectedCategory(cat.id);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                  isSelected
+                    ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                    : "bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                }`}
+              >
+                <span>{cat.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    isSelected
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Product Items Display */}
+      {filteredAndSorted.length === 0 ? (
+        <div className="py-12 px-4 text-center rounded-2xl bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/80">
+          <Tag className="w-12 h-12 text-gray-400 mx-auto mb-3 opacity-60" />
+          <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1">
+            No products match your search
+          </h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            Try adjusting your search terms or category filter.
+          </p>
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedCategory("all");
+              }}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 cursor-pointer"
+            >
+              Reset Filters
+            </button>
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 cursor-pointer"
+            >
+              Add New Product
+            </button>
+          </div>
+        </div>
+      ) : viewMode === "grid" ? (
+        /* Grid View */
+        <motion.div
+          layout
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5"
+        >
+          <AnimatePresence>
+            {filteredAndSorted.map((item) => {
+              const isSelected = selectedProduct && selectedProduct.product === item.product;
+              const category = item.category || getCategoryForProduct(item.product);
+
+              return (
+                <motion.div
+                  layout
+                  key={item.product}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  whileHover={{ y: -3 }}
+                  onClick={() => {
+                    playUiSound?.("select");
+                    onSelectProduct(item);
+                  }}
+                  className={`relative p-4 rounded-2xl cursor-pointer transition-all border ${
+                    isSelected
+                      ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400 shadow-md ring-2 ring-emerald-500/20"
+                      : "bg-white dark:bg-gray-800/80 hover:bg-gray-50/90 dark:hover:bg-gray-750 border-gray-200 dark:border-gray-700/80 shadow-xs"
+                  }`}
+                >
+                  {/* Top Bar with category & edit/delete */}
+                  <div className="flex items-center justify-between gap-1 mb-2">
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border truncate max-w-[120px] ${getCategoryBadgeStyle(
+                        category
+                      )}`}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
+                      {category}
+                    </span>
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          playUiSound?.("click");
+                          onEditProduct(item);
+                        }}
+                        className="p-1 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        title="Edit product"
                       >
-                        <path
-                          fillRule="evenodd"
-                          d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"
-                          clipRule="evenodd"
-                        />
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </motion.button>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          playUiSound?.("delete");
+                          onDeleteProduct(item.product);
+                        }}
+                        className="p-1 rounded-lg text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        title="Delete product"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Product Title */}
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                      {item.product}
+                    </h4>
+                    {isSelected && (
+                      <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Price Tags */}
+                  <div className="flex items-baseline justify-between pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                    <div>
+                      <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                        ₹{item.price_per_kg}
+                      </span>
+                      <span className="text-[11px] text-gray-400 ml-1">/ kg</span>
+                    </div>
+                    <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                      ₹{Math.ceil(item.price_per_kg / 10)}/100g
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
+      ) : (
+        /* List View */
+        <motion.div layout className="space-y-2">
+          {filteredAndSorted.map((item) => {
+            const isSelected = selectedProduct && selectedProduct.product === item.product;
+            const category = item.category || getCategoryForProduct(item.product);
+
+            return (
+              <motion.div
+                layout
+                key={item.product}
+                onClick={() => {
+                  playUiSound?.("select");
+                  onSelectProduct(item);
+                }}
+                className={`flex items-center justify-between p-3.5 rounded-xl cursor-pointer transition-all border ${
+                  isSelected
+                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500 ring-1 ring-emerald-500/30"
+                    : "bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-750 border-gray-200 dark:border-gray-700/80"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                      isSelected
+                        ? "bg-emerald-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    {item.product.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                      {item.product}
+                    </h4>
+                    <span
+                      className={`inline-block text-[10px] font-semibold px-2 py-0.2 rounded-full border ${getCategoryBadgeStyle(
+                        category
+                      )}`}
+                    >
+                      {category}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                      ₹{item.price_per_kg}/kg
+                    </span>
+                    <span className="text-[11px] text-gray-400 block">
+                      ₹{Math.ceil(item.price_per_kg / 10)}/100g
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => {
+                        playUiSound?.("click");
+                        onEditProduct(item);
+                      }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      title="Edit product"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        playUiSound?.("delete");
+                        onDeleteProduct(item.product);
+                      }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      title="Delete product"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </motion.div>
-            ))}
-          </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center h-32 bg-gray-700/30 rounded-lg"
-          >
-            {val ? (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-10 w-10 text-gray-500 mb-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <p className="text-center text-xl font-medium text-gray-400">
-                  No products found
-                </p>
-                <p className="text-center text-sm text-gray-500 mt-1">
-                  Try a different search term
-                </p>
-              </>
-            ) : list.length === 0 ? (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-10 w-10 text-gray-500 mb-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                  />
-                </svg>
-                <p className="text-center text-xl font-medium text-gray-400">
-                  No products available
-                </p>
-                <p className="text-center text-sm text-gray-500 mt-1">
-                  Add a product using the button above
-                </p>
-              </>
-            ) : (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-10 w-10 text-gray-500 mb-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <p className="text-center text-xl font-medium text-gray-400">
-                  No products found
-                </p>
-                <p className="text-center text-sm text-gray-500 mt-1">
-                  Try a different search term
-                </p>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+            );
+          })}
+        </motion.div>
+      )}
+    </div>
   );
 };
 
